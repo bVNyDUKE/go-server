@@ -50,7 +50,7 @@ func handleReq(req request) {
 	re := regexp.MustCompile(`^/\w+$`)
 	if match := re.FindString(req.Path); match != "" {
 		fmt.Println("Match is", match)
-		req.text(match)
+		req.text(match[1:])
 		return
 	}
 	req.sendNotFound()
@@ -65,10 +65,12 @@ type request struct {
 
 func (r *request) sendOk() {
 	fmt.Fprintf(r.Conn, "HTTP/1.1 200 OK\r\n\r\n")
+	r.Conn.Close()
 }
 
 func (r *request) sendNotFound() {
 	fmt.Fprintf(r.Conn, "HTTP/1.1 404 Not Found\r\n\r\n")
+	r.Conn.Close()
 }
 
 func (r *request) text(content string) {
