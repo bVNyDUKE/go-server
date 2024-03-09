@@ -8,7 +8,7 @@ import (
 
 func handleConnection(conn net.Conn) {
 	fmt.Println("Handling connection", conn.RemoteAddr().String())
-	fmt.Fprintf(conn, "HTTP/1.0 200 OK\r\n\r\n")
+	fmt.Fprintf(conn, "HTTP/1.1 200 OK\r\n\r\n")
 }
 
 func main() {
