@@ -7,6 +7,7 @@ import (
 )
 
 func handleConnection(conn net.Conn) {
+	fmt.Println("Handling connection", conn.RemoteAddr().String())
 	fmt.Fprintf(conn, "HTTP/1.0 200 OK\r\n\r\n")
 }
 
@@ -21,6 +22,7 @@ func main() {
 
 	for {
 		conn, err := l.Accept()
+		fmt.Println("accepting a connection from", conn.RemoteAddr().String())
 		if err != nil {
 			fmt.Println("Error accepting connection: ", err.Error())
 			os.Exit(1)
