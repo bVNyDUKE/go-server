@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"regexp"
 	"strings"
 )
 
@@ -43,9 +44,16 @@ func main() {
 func handleReq(req request) {
 	if req.Path == "/" {
 		req.sendOk()
-	} else {
-		req.sendNotFound()
+		return
 	}
+
+	re := regexp.MustCompile(`\w+$`)
+	if match := re.FindString(req.Path); match != "" {
+		fmt.Println("Match is", match)
+		req.text(match)
+		return
+	}
+	req.sendNotFound()
 }
 
 type request struct {
@@ -61,6 +69,10 @@ func (r *request) sendOk() {
 
 func (r *request) sendNotFound() {
 	fmt.Fprintf(r.Conn, "HTTP/1.1 404 Not Found\r\n\r\n")
+}
+
+func (r *request) text(content string) {
+	fmt.Fprintf(r.Conn, "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %v\r\n\r\n%s\r\n", len(content), content)
 }
 
 func getRequest(conn net.Conn) (request, error) {
