@@ -6,6 +6,10 @@ import (
 	"os"
 )
 
+func handleConnection(conn net.Conn) {
+	fmt.Fprintf(conn, "HTTP/1.0 200 OK\r\n\r\n")
+}
+
 func main() {
 	fmt.Println("Logs from your program will appear here!")
 
@@ -15,9 +19,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	_, err = l.Accept()
-	if err != nil {
-		fmt.Println("Error accepting connection: ", err.Error())
-		os.Exit(1)
+	for {
+		conn, err := l.Accept()
+		if err != nil {
+			fmt.Println("Error accepting connection: ", err.Error())
+			os.Exit(1)
+		}
+		go handleConnection(conn)
 	}
 }
