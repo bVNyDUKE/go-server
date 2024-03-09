@@ -47,7 +47,7 @@ func handleReq(req request) {
 		return
 	}
 
-	re := regexp.MustCompile(`\w+$`)
+	re := regexp.MustCompile(`^/\w+$`)
 	if match := re.FindString(req.Path); match != "" {
 		fmt.Println("Match is", match)
 		req.text(match)
