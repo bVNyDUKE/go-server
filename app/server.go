@@ -17,16 +17,15 @@ func main() {
 	s := NewServer(ADDR, PORT)
 
 	s.AddHandler("/", func(res Response, req *Request) {
-		fmt.Println("BASE")
 		fmt.Fprintf(res, "HTTP/1.1 200 OK\r\n\r\n")
 	})
 	s.AddHandler("/echo", func(res Response, req *Request) {
-		fmt.Println("HERE", req)
 		if _, match, found := strings.Cut(req.Path, "/echo/"); found {
-			fmt.Println("Match is", match)
 			res.text(match)
-			return
 		}
+	})
+	s.AddHandler("/user-agent", func(res Response, req *Request) {
+		res.text(req.Headers["User-Agent"])
 	})
 
 	if err := s.Run(); err != nil {
@@ -102,19 +101,38 @@ type Request struct {
 	Method  string
 	Path    string
 	Version string
+	Headers map[string]string
 }
 
 func NewRequest(conn net.Conn) (Request, error) {
-	header, err := bufio.NewReader(conn).ReadString('\n')
-	if err != nil {
-		return Request{}, err
-	}
-	vals := strings.Fields(header)
-
 	r := Request{
-		Method:  vals[0],
-		Path:    vals[1],
-		Version: vals[2],
+		Headers: make(map[string]string),
+	}
+	// parse statusLine line
+	scanner := bufio.NewScanner(conn)
+
+	for scanner.Scan() {
+		if scanner.Text() == "" {
+			break
+		}
+
+		// parse status line
+		if r.Method == "" {
+			vals := strings.Fields(scanner.Text())
+			r.Method = vals[0]
+			r.Path = vals[1]
+			r.Version = vals[2]
+			continue
+		}
+
+		// parse headers
+		headerType, headerValue, ok := strings.Cut(scanner.Text(), ": ")
+		if !ok {
+			fmt.Println("Malformed header")
+			continue
+		}
+		fmt.Println("HEADER", headerType, headerValue)
+		r.Headers[headerType] = headerValue
 	}
 
 	return r, nil
