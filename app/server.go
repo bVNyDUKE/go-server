@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -47,14 +48,35 @@ func main() {
 			return
 		}
 
-		// puts the whole shebang into memory, think about streaming
-		fileContent, err := os.ReadFile(directory + string(os.PathSeparator) + fileName)
-		if err != nil {
-			res.NotFound()
-			return
+		filePath := directory + string(os.PathSeparator) + fileName
+
+		if req.Method == "GET" {
+			// puts the whole shebang into memory, think about streaming
+			fileContent, err := os.ReadFile(filePath)
+			if err != nil {
+				res.NotFound()
+				return
+			}
+
+			res.File(fileContent)
 		}
 
-		res.File(fileContent)
+		if req.Method == "POST" {
+			f, err := os.Create(filePath)
+			if err != nil {
+				fmt.Println("Error creating file", filePath, err)
+				res.NotFound()
+				return
+			}
+			written, writeErr := f.Write(req.Body)
+			if writeErr != nil {
+				fmt.Println("Error writing file", filePath, writeErr)
+				res.NotFound()
+				return
+			}
+			fmt.Println("Written bytes", written)
+			res.Created()
+		}
 	})
 
 	if err := s.Run(); err != nil {
@@ -131,6 +153,7 @@ type Request struct {
 	Path    string
 	Version string
 	Headers map[string]string
+	Body    []byte
 }
 
 func NewRequest(conn net.Conn) (Request, error) {
@@ -138,29 +161,47 @@ func NewRequest(conn net.Conn) (Request, error) {
 		Headers: make(map[string]string),
 	}
 	// parse statusLine line
-	scanner := bufio.NewScanner(conn)
+	reader := bufio.NewReader(conn)
+	statusLine, err := reader.ReadString('\n')
+	if err != nil {
+		fmt.Println("Error reading statusline", err)
+		os.Exit(1)
+	}
 
-	for scanner.Scan() {
-		if scanner.Text() == "" {
+	vals := strings.Fields(statusLine)
+	r.Method = vals[0]
+	r.Path = vals[1]
+	r.Version = vals[2]
+
+	// parse headers
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil || line == "\r\n" {
 			break
 		}
-
-		// parse status line
-		if r.Method == "" {
-			vals := strings.Fields(scanner.Text())
-			r.Method = vals[0]
-			r.Path = vals[1]
-			r.Version = vals[2]
-			continue
-		}
-
-		// parse headers
-		headerType, headerValue, ok := strings.Cut(scanner.Text(), ": ")
+		headerType, headerValue, ok := strings.Cut(line, ": ")
 		if !ok {
 			fmt.Println("Malformed header")
 			continue
 		}
-		r.Headers[headerType] = headerValue
+		r.Headers[headerType] = strings.TrimSpace(headerValue)
+	}
+
+	if contentLength, ok := r.Headers["Content-Length"]; ok && len(contentLength) > 0 {
+		length, err := strconv.Atoi(contentLength)
+		if err != nil {
+			fmt.Println("Error parsing content length", err)
+			os.Exit(1)
+		}
+
+		r.Body = make([]byte, length)
+		read, err := reader.Read(r.Body)
+		if err != nil {
+			fmt.Println("Error reading request body", err)
+			os.Exit(1)
+		}
+		fmt.Println("Read bytes", read)
+
 	}
 
 	return r, nil
@@ -183,6 +224,11 @@ func NewResponse(conn net.Conn) Response {
 
 func (r *Response) Ok() {
 	r.status = "200 OK"
+	r.Write()
+}
+
+func (r *Response) Created() {
+	r.status = "201 Created"
 	r.Write()
 }
 
