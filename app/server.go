@@ -2,6 +2,8 @@ package main
 
 import (
 	"bufio"
+	"bytes"
+	"compress/gzip"
 	"flag"
 	"fmt"
 	"net"
@@ -270,8 +272,22 @@ func (r Response) compressionEnabled() bool {
 	return false
 }
 
+func (r Response) compressBody(body []byte) ([]byte, error) {
+	var buf bytes.Buffer
+	zw := gzip.NewWriter(&buf)
+	_, err := zw.Write(body)
+	if err != nil {
+		return []byte{}, err
+	}
+	if err := zw.Close(); err != nil {
+		return []byte{}, err
+	}
+	return buf.Bytes(), nil
+}
+
 func (r Response) Write() {
 	var resBuilder strings.Builder
+	body := r.body
 
 	resBuilder.WriteString(fmt.Sprintf("HTTP/1.1 %s\r\n", r.status))
 	if r.contentType != "" {
@@ -280,18 +296,24 @@ func (r Response) Write() {
 	compress := r.compressionEnabled()
 	if compress {
 		resBuilder.WriteString("Content-Encoding: gzip\r\n")
+		compressed, err := r.compressBody(r.body)
+		if err != nil {
+			fmt.Println("Error compressing response")
+			r.conn.Close()
+			return
+		}
+		body = compressed
 	}
-	if r.contentLength != 0 {
-		resBuilder.WriteString(fmt.Sprintf("Content-Length: %v\r\n", r.contentLength))
+
+	contentLen := len(body)
+	if contentLen != 0 {
+		resBuilder.WriteString(fmt.Sprintf("Content-Length: %v\r\n", contentLen))
 	}
 
 	resBuilder.WriteString("\r\n")
 
-	if len(r.body) != 0 {
-		resBuilder.WriteString(string(r.body))
-	}
-	if compress {
-		fmt.Println("Compressing response")
+	if contentLen != 0 {
+		resBuilder.WriteString(string(body))
 	}
 
 	_, err := fmt.Fprint(r.conn, resBuilder.String())
