@@ -135,7 +135,7 @@ func (s *Server) Run() error {
 			if err != nil {
 				fmt.Println("Error making request object: ", err.Error())
 			}
-			res := NewResponse(conn)
+			res := NewResponse(conn, &req)
 
 			fmt.Println("Handling connection", conn.RemoteAddr().String())
 			handler, ok := s.getHandlerFromPath(req.Path)
@@ -208,6 +208,7 @@ func NewRequest(conn net.Conn) (Request, error) {
 }
 
 type Response struct {
+	req           *Request
 	conn          net.Conn
 	status        string
 	contentType   string
@@ -215,8 +216,9 @@ type Response struct {
 	body          []byte
 }
 
-func NewResponse(conn net.Conn) Response {
+func NewResponse(conn net.Conn, req *Request) Response {
 	return Response{
+		req:    req,
 		status: "200 OK",
 		conn:   conn,
 	}
@@ -253,8 +255,13 @@ func (r *Response) File(fileContent []byte) {
 
 func (r Response) Write() {
 	var resBuilder strings.Builder
+	compress := false
 
 	resBuilder.WriteString(fmt.Sprintf("HTTP/1.1 %s\r\n", r.status))
+	if enc, ok := r.req.Headers["Accept-Encoding"]; ok && enc == "gzip" {
+		resBuilder.WriteString("Content-Encoding: gzip\r\n")
+		compress = true
+	}
 	if r.contentType != "" {
 		resBuilder.WriteString(fmt.Sprintf("Content-Type: %s\r\n", r.contentType))
 	}
@@ -267,6 +274,9 @@ func (r Response) Write() {
 
 	if len(r.body) != 0 {
 		resBuilder.WriteString(string(r.body))
+	}
+	if compress {
+		fmt.Println("Compressing response")
 	}
 
 	_, err := fmt.Fprint(r.conn, resBuilder.String())
