@@ -253,19 +253,34 @@ func (r *Response) File(fileContent []byte) {
 	r.Write()
 }
 
+func (r Response) compressionEnabled() bool {
+	enc, ok := r.req.Headers["Accept-Encoding"]
+	if !ok {
+		return false
+	}
+
+	if enc == "gzip" {
+		return true
+	}
+
+	if strings.Contains(enc, "gzip,") {
+		return true
+	}
+
+	return false
+}
+
 func (r Response) Write() {
 	var resBuilder strings.Builder
-	compress := false
 
 	resBuilder.WriteString(fmt.Sprintf("HTTP/1.1 %s\r\n", r.status))
-	if enc, ok := r.req.Headers["Accept-Encoding"]; ok && enc == "gzip" {
-		resBuilder.WriteString("Content-Encoding: gzip\r\n")
-		compress = true
-	}
 	if r.contentType != "" {
 		resBuilder.WriteString(fmt.Sprintf("Content-Type: %s\r\n", r.contentType))
 	}
-
+	compress := r.compressionEnabled()
+	if compress {
+		resBuilder.WriteString("Content-Encoding: gzip\r\n")
+	}
 	if r.contentLength != 0 {
 		resBuilder.WriteString(fmt.Sprintf("Content-Length: %v\r\n", r.contentLength))
 	}
